@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, Button, StyleSheet, ScrollView
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../config/firebaseConfig'; // 🔥 Asegúrate del path correcto
 
 export default function RegistroScreen({ navigation }) {
   const [tipoUsuario, setTipoUsuario] = useState('Consumidor');
@@ -18,30 +20,39 @@ export default function RegistroScreen({ navigation }) {
   const [etapa, setEtapa] = useState('');
 
   const handleRegistro = async () => {
-    const usuario = {
-      tipoUsuario,
-      nombre,
-      correo,
-      password,
-      ...(tipoUsuario === 'Productor' && {
-        finca, municipio, vereda, area, productos, etapa,
-      }),
-    };
+    if (!correo || !password || !nombre) {
+      alert("Por favor completa todos los campos obligatorios.");
+      return;
+    }
 
     try {
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+      const userCredential = await createUserWithEmailAndPassword(auth, correo, password);
+      const uid = userCredential.user.uid;
 
-      const existe = usuarios.find(u => u.correo === correo);
-      if (existe) return alert('Este correo ya está registrado');
+      const datosUsuario = {
+        uid,
+        tipoUsuario,
+        nombre,
+        correo,
+        ...(tipoUsuario === 'Productor' && {
+          finca,
+          municipio,
+          vereda,
+          area,
+          productos,
+          etapa,
+        })
+      };
 
-      usuarios.push(usuario);
-      await AsyncStorage.setItem('usuarios', JSON.stringify(usuarios));
-      alert('Registro exitoso');
+      // Guardar en Firestore
+      await setDoc(doc(db, 'usuarios', uid), datosUsuario);
 
+      alert("Registro exitoso");
       navigation.navigate('Login');
+
     } catch (error) {
-      console.error('Error registrando:', error);
+      console.error("Error al registrar:", error);
+      alert(error.message);
     }
   };
 
@@ -79,7 +90,5 @@ const styles = StyleSheet.create({
   container: { padding: 20 },
   title: { fontSize: 22, textAlign: 'center', marginBottom: 20 },
   input: { borderWidth: 1, padding: 10, marginVertical: 5, borderRadius: 5 },
-  picker: { borderWidth: 1, marginBottom: 10,
-    
-   },
+  picker: { borderWidth: 1, marginBottom: 10 },
 });
